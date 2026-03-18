@@ -1,0 +1,8 @@
+{
+  "name": "Nexora",
+  "description": "A community-based social collaboration platform for students and freshers, combining the networking of LinkedIn, the collaboration of GitHub, and the community of Discord.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
