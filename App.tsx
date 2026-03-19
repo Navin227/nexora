@@ -8,7 +8,7 @@ import Explore from './components/Explore';
 import CommunityDashboard from './components/CommunityDashboard';
 import ChatWindow from './components/ChatWindow';
 import MemberSidebar from './components/MemberSidebar';
-import OTPLogin from './components/OTPLogin';
+import Auth from './components/Auth';
 import { MOCK_COMMUNITIES, MOCK_PROJECTS, MOCK_USERS } from './constants';
 import { Community, Project, ChatMessage, User, Milestone, ProjectResource, ProjectStatus, JoinRequest } from './types';
 import { socketService } from './services/socketService';
@@ -150,7 +150,7 @@ const App: React.FC = () => {
     try {
       sessionStorage.removeItem('nexora_auth_token');
       sessionStorage.removeItem('nexora_user');
-      sessionStorage.removeItem('nexora_phone');
+      sessionStorage.removeItem('nexora_username');
     } catch (err) {
       console.error('Failed to clear session:', err);
     }
@@ -490,11 +490,11 @@ const App: React.FC = () => {
   };
 
   if (!isAuthenticated) {
-    return <OTPLogin onAuthSuccess={handleAuthSuccess} />;
+    return <Auth onAuthSuccess={handleAuthSuccess} />;
   }
 
   if (!currentUser) {
-    return <OTPLogin onAuthSuccess={handleAuthSuccess} />;
+    return <Auth onAuthSuccess={handleAuthSuccess} />;
   }
 
   if (isLanding) {
@@ -519,10 +519,9 @@ const App: React.FC = () => {
            <div className="flex flex-col sm:flex-row items-center justify-center gap-6 pt-6">
               <button 
                 onClick={handleLogin}
-                className="group relative px-10 py-5 bg-white dark:bg-zinc-900 text-slate-900 dark:text-white rounded-[2rem] font-black text-sm uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-2xl border border-slate-200 dark:border-white/10 flex items-center space-x-4"
+                className="group relative px-10 py-5 vibrant-gradient text-white rounded-[2rem] font-black text-sm uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-2xl shadow-brand-500/20 flex items-center space-x-4"
               >
-                <img src="https://www.google.com/favicon.ico" className="w-6 h-6" alt="Google" />
-                <span>Continue with Google</span>
+                <span>Get Started</span>
               </button>
            </div>
         </div>
