@@ -13,6 +13,11 @@ interface AuthUser {
   role: string;
   avatar: string;
   bio: string;
+  skills: string[];
+  interests: string[];
+  github?: string;
+  linkedin?: string;
+  cvUrl?: string;
   passwordHash: string; // In production, use Cognito - never store passwords
   registeredAt: number;
   cognitoId?: string; // AWS Cognito user ID for production
@@ -238,6 +243,11 @@ class AuthService {
     college: string;
     role: string;
     bio: string;
+    skills: string[];
+    interests: string[];
+    github?: string;
+    linkedin?: string;
+    cv?: File | null;
   }): { success: boolean; message: string; user?: AuthUser } {
     const cleanedNumber = phoneNumber.replace(/\D/g, '');
 
@@ -260,7 +270,11 @@ class AuthService {
       return { success: false, message: passwordValidation.message! };
     }
 
-    // Create new user
+    if (!profileData.skills || profileData.skills.length === 0) {
+      return { success: false, message: 'At least one skill is required' };
+    }
+
+    // Create new user with comprehensive profile
     const user: AuthUser = {
       phoneNumber: cleanedNumber,
       email: STATIC_EMAIL,
@@ -270,6 +284,12 @@ class AuthService {
       role: profileData.role,
       avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(profileData.name)}`,
       bio: profileData.bio,
+      skills: profileData.skills || [],
+      interests: profileData.interests || [],
+      github: profileData.github,
+      linkedin: profileData.linkedin,
+      // In production, upload CV to cloud storage and store URL
+      cvUrl: profileData.cv ? `cv-${cleanedNumber}-${Date.now()}` : undefined,
       passwordHash: this.hashPassword(password),
       registeredAt: Date.now()
     };
@@ -278,7 +298,7 @@ class AuthService {
     this.otpSessions.delete(cleanedNumber);
     this.saveRegisteredUsers();
 
-    console.log(`[Auth] User registered: ${username} (${cleanedNumber})`);
+    console.log(`[Auth] User registered: ${username} with ${profileData.skills.length} skills and ${profileData.interests.length} interests`);
 
     return {
       success: true,

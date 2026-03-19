@@ -24,7 +24,14 @@ const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
     name: '',
     college: '',
     role: 'Student',
-    bio: ''
+    bio: '',
+    github: '',
+    linkedin: '',
+    skills: [] as string[],
+    interests: [] as string[],
+    currentSkill: '',
+    currentInterest: '',
+    cv: null as File | null
   });
 
   // Check password strength
@@ -155,14 +162,20 @@ const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
 
   const handleSignUpProfileComplete = async () => {
     setError('');
-    if (!profileData.name.trim() || !profileData.college.trim()) {
-      setError('Name and college are required');
+    if (!profileData.name.trim() || !profileData.college.trim() || profileData.skills.length === 0) {
+      setError('Name, college, and at least one skill are required');
       return;
     }
 
     setLoading(true);
     try {
-      const result = authService.completeSignUp(phoneNumber, username, password, profileData);
+      const result = authService.completeSignUp(phoneNumber, username, password, {
+        ...profileData,
+        skills: profileData.skills,
+        interests: profileData.interests,
+        github: profileData.github,
+        linkedin: profileData.linkedin
+      });
       if (result.success && result.user) {
         const newUser: User = {
           id: `u-${result.user.username}`,
@@ -172,9 +185,9 @@ const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
           college: result.user.college,
           bio: result.user.bio,
           avatar: result.user.avatar,
-          skills: [],
-          githubUrl: '',
-          linkedinUrl: '',
+          skills: result.user.skills || [],
+          githubUrl: result.user.github || '',
+          linkedinUrl: result.user.linkedin || '',
           reputation: 0,
           hasOnboarded: false
         };
@@ -511,72 +524,273 @@ const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
   );
 
   const renderSignUpProfile = () => (
-    <div className="space-y-6">
-      <div className="text-center space-y-1">
-        <h2 className="text-2xl font-black text-slate-900 dark:text-white uppercase">Complete Profile</h2>
-        <p className="text-xs text-slate-400">Step 4 of 4</p>
+    <div className="space-y-6 max-h-[75vh] overflow-y-auto custom-scrollbar">
+      <div className="text-center space-y-1 sticky top-0 bg-white dark:bg-zinc-900 z-10 pb-4">
+        <h2 className="text-2xl font-black text-slate-900 dark:text-white uppercase">Complete Your Profile</h2>
+        <p className="text-xs text-slate-400">Step 4 of 4 - Build Your Professional Identity</p>
       </div>
 
-      <div className="space-y-4">
-        <div className="space-y-2">
-          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Full Name *</label>
-          <input
-            type="text"
-            placeholder="Your name"
-            className="w-full bg-slate-100 dark:bg-zinc-950 border-2 border-slate-200 dark:border-white/5 p-5 rounded-2xl outline-none focus:ring-2 focus:ring-brand-500 text-sm font-bold transition-all"
-            value={profileData.name}
-            onChange={(e) => setProfileData({ ...profileData, name: e.target.value })}
-            disabled={loading}
-          />
+      <div className="space-y-5 pb-20">
+        {/* Personal Details Section */}
+        <div className="space-y-4 p-4 bg-slate-50 dark:bg-zinc-800/50 rounded-xl border border-slate-200 dark:border-white/5">
+          <p className="text-[10px] font-black text-slate-600 dark:text-slate-300 uppercase tracking-widest">Personal Details</p>
+          
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Full Name *</label>
+            <input
+              type="text"
+              placeholder="Your full name"
+              className="w-full bg-white dark:bg-zinc-950 border-2 border-slate-200 dark:border-white/5 p-4 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 text-sm font-bold transition-all"
+              value={profileData.name}
+              onChange={(e) => setProfileData({ ...profileData, name: e.target.value })}
+              disabled={loading}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">College/University *</label>
+            <input
+              type="text"
+              placeholder="Your institution"
+              className="w-full bg-white dark:bg-zinc-950 border-2 border-slate-200 dark:border-white/5 p-4 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 text-sm font-bold transition-all"
+              value={profileData.college}
+              onChange={(e) => setProfileData({ ...profileData, college: e.target.value })}
+              disabled={loading}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Current Role</label>
+            <select
+              className="w-full bg-white dark:bg-zinc-950 border-2 border-slate-200 dark:border-white/5 p-4 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 text-sm font-bold transition-all"
+              value={profileData.role}
+              onChange={(e) => setProfileData({ ...profileData, role: e.target.value })}
+              disabled={loading}
+            >
+              <option>Student</option>
+              <option>Developer</option>
+              <option>Designer</option>
+              <option>Product Manager</option>
+              <option>Founder</option>
+              <option>Marketer</option>
+              <option>Other</option>
+            </select>
+          </div>
         </div>
 
-        <div className="space-y-2">
-          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">College/University *</label>
-          <input
-            type="text"
-            placeholder="Your college"
-            className="w-full bg-slate-100 dark:bg-zinc-950 border-2 border-slate-200 dark:border-white/5 p-5 rounded-2xl outline-none focus:ring-2 focus:ring-brand-500 text-sm font-bold transition-all"
-            value={profileData.college}
-            onChange={(e) => setProfileData({ ...profileData, college: e.target.value })}
-            disabled={loading}
-          />
+        {/* Professional Links Section */}
+        <div className="space-y-4 p-4 bg-slate-50 dark:bg-zinc-800/50 rounded-xl border border-slate-200 dark:border-white/5">
+          <p className="text-[10px] font-black text-slate-600 dark:text-slate-300 uppercase tracking-widest">Professional Links</p>
+          
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">GitHub Profile</label>
+            <input
+              type="url"
+              placeholder="https://github.com/yourprofile"
+              className="w-full bg-white dark:bg-zinc-950 border-2 border-slate-200 dark:border-white/5 p-4 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 text-sm font-medium transition-all"
+              value={profileData.github}
+              onChange={(e) => setProfileData({ ...profileData, github: e.target.value })}
+              disabled={loading}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">LinkedIn Profile</label>
+            <input
+              type="url"
+              placeholder="https://linkedin.com/in/yourprofile"
+              className="w-full bg-white dark:bg-zinc-950 border-2 border-slate-200 dark:border-white/5 p-4 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 text-sm font-medium transition-all"
+              value={profileData.linkedin}
+              onChange={(e) => setProfileData({ ...profileData, linkedin: e.target.value })}
+              disabled={loading}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Resume/CV (PDF)</label>
+            <input
+              type="file"
+              accept=".pdf,.doc,.docx"
+              className="w-full bg-white dark:bg-zinc-950 border-2 border-slate-200 dark:border-white/5 p-4 rounded-xl text-sm font-medium transition-all"
+              onChange={(e) => setProfileData({ ...profileData, cv: e.target.files?.[0] || null })}
+              disabled={loading}
+            />
+            {profileData.cv && (
+              <p className="text-xs text-emerald-600 dark:text-emerald-400 font-bold px-2">✓ {profileData.cv.name} ({(profileData.cv.size / 1024).toFixed(1)} KB)</p>
+            )}
+          </div>
         </div>
 
-        <div className="space-y-2">
-          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Role</label>
-          <select
-            className="w-full bg-slate-100 dark:bg-zinc-950 border-2 border-slate-200 dark:border-white/5 p-5 rounded-2xl outline-none focus:ring-2 focus:ring-brand-500 text-sm font-bold transition-all"
-            value={profileData.role}
-            onChange={(e) => setProfileData({ ...profileData, role: e.target.value })}
-            disabled={loading}
-          >
-            <option>Student</option>
-            <option>Developer</option>
-            <option>Designer</option>
-            <option>Founder</option>
-            <option>Other</option>
-          </select>
+        {/* Skills Section */}
+        <div className="space-y-4 p-4 bg-slate-50 dark:bg-zinc-800/50 rounded-xl border border-slate-200 dark:border-white/5">
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] font-black text-slate-600 dark:text-slate-300 uppercase tracking-widest">Skills & Expertise</p>
+            <span className="text-[9px] font-bold text-slate-400">{profileData.skills.length} added</span>
+          </div>
+          
+          <div className="flex gap-2">
+            <input
+              type="text"
+              placeholder="e.g., React, Python, UI Design"
+              className="flex-1 bg-white dark:bg-zinc-950 border-2 border-slate-200 dark:border-white/5 p-3 rounded-lg outline-none focus:ring-2 focus:ring-brand-500 text-sm font-medium transition-all"
+              value={profileData.currentSkill}
+              onChange={(e) => setProfileData({ ...profileData, currentSkill: e.target.value })}
+              onKeyPress={(e) => {
+                if (e.key === 'Enter' && profileData.currentSkill.trim()) {
+                  setProfileData({
+                    ...profileData,
+                    skills: [...profileData.skills, profileData.currentSkill.trim()],
+                    currentSkill: ''
+                  });
+                }
+              }}
+              disabled={loading}
+            />
+            <button
+              onClick={() => {
+                if (profileData.currentSkill.trim()) {
+                  setProfileData({
+                    ...profileData,
+                    skills: [...profileData.skills, profileData.currentSkill.trim()],
+                    currentSkill: ''
+                  });
+                }
+              }}
+              className="px-4 py-3 bg-brand-500/20 text-brand-600 dark:text-brand-400 rounded-lg hover:bg-brand-500/30 transition-all font-bold text-sm disabled:opacity-50"
+              disabled={loading || !profileData.currentSkill.trim()}
+            >
+              Add
+            </button>
+          </div>
+
+          {profileData.skills.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {profileData.skills.map((skill, idx) => (
+                <div key={idx} className="flex items-center gap-2 px-3 py-1 bg-brand-500/10 border border-brand-500/30 rounded-full">
+                  <span className="text-xs font-bold text-brand-600 dark:text-brand-400">{skill}</span>
+                  <button
+                    onClick={() => setProfileData({
+                      ...profileData,
+                      skills: profileData.skills.filter((_, i) => i !== idx)
+                    })}
+                    className="text-brand-500 hover:text-brand-600 font-bold"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
-        <div className="space-y-2">
-          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Bio</label>
-          <textarea
-            placeholder="Tell us about yourself"
-            className="w-full bg-slate-100 dark:bg-zinc-950 border-2 border-slate-200 dark:border-white/5 p-5 rounded-2xl outline-none focus:ring-2 focus:ring-brand-500 text-sm font-medium h-20 transition-all resize-none"
-            value={profileData.bio}
-            onChange={(e) => setProfileData({ ...profileData, bio: e.target.value })}
-            disabled={loading}
-          />
+        {/* Interests Section */}
+        <div className="space-y-4 p-4 bg-slate-50 dark:bg-zinc-800/50 rounded-xl border border-slate-200 dark:border-white/5">
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] font-black text-slate-600 dark:text-slate-300 uppercase tracking-widest">Interests & Passions</p>
+            <span className="text-[9px] font-bold text-slate-400">{profileData.interests.length} added</span>
+          </div>
+          
+          <div className="flex gap-2">
+            <input
+              type="text"
+              placeholder="e.g., Open Source, Startups, Gaming"
+              className="flex-1 bg-white dark:bg-zinc-950 border-2 border-slate-200 dark:border-white/5 p-3 rounded-lg outline-none focus:ring-2 focus:ring-brand-500 text-sm font-medium transition-all"
+              value={profileData.currentInterest}
+              onChange={(e) => setProfileData({ ...profileData, currentInterest: e.target.value })}
+              onKeyPress={(e) => {
+                if (e.key === 'Enter' && profileData.currentInterest.trim()) {
+                  setProfileData({
+                    ...profileData,
+                    interests: [...profileData.interests, profileData.currentInterest.trim()],
+                    currentInterest: ''
+                  });
+                }
+              }}
+              disabled={loading}
+            />
+            <button
+              onClick={() => {
+                if (profileData.currentInterest.trim()) {
+                  setProfileData({
+                    ...profileData,
+                    interests: [...profileData.interests, profileData.currentInterest.trim()],
+                    currentInterest: ''
+                  });
+                }
+              }}
+              className="px-4 py-3 bg-purple-500/20 text-purple-600 dark:text-purple-400 rounded-lg hover:bg-purple-500/30 transition-all font-bold text-sm disabled:opacity-50"
+              disabled={loading || !profileData.currentInterest.trim()}
+            >
+              Add
+            </button>
+          </div>
+
+          {profileData.interests.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {profileData.interests.map((interest, idx) => (
+                <div key={idx} className="flex items-center gap-2 px-3 py-1 bg-purple-500/10 border border-purple-500/30 rounded-full">
+                  <span className="text-xs font-bold text-purple-600 dark:text-purple-400">{interest}</span>
+                  <button
+                    onClick={() => setProfileData({
+                      ...profileData,
+                      interests: profileData.interests.filter((_, i) => i !== idx)
+                    })}
+                    className="text-purple-500 hover:text-purple-600 font-bold"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
-        <div className="text-center text-xs text-slate-500 dark:text-slate-400">
-          <p>Email: <span className="font-bold">{STATIC_EMAIL}</span></p>
+        {/* Bio Section */}
+        <div className="space-y-4 p-4 bg-slate-50 dark:bg-zinc-800/50 rounded-xl border border-slate-200 dark:border-white/5">
+          <p className="text-[10px] font-black text-slate-600 dark:text-slate-300 uppercase tracking-widest">About You</p>
+          
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Bio</label>
+            <textarea
+              placeholder="Tell the community about yourself, your journey, and what you're passionate about..."
+              className="w-full bg-white dark:bg-zinc-950 border-2 border-slate-200 dark:border-white/5 p-4 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 text-sm font-medium h-24 transition-all resize-none"
+              value={profileData.bio}
+              onChange={(e) => setProfileData({ ...profileData, bio: e.target.value })}
+              disabled={loading}
+            />
+            <p className="text-[10px] text-slate-400 px-2">{profileData.bio.length}/500 characters</p>
+          </div>
         </div>
+
+        {/* Email Display */}
+        <div className="p-4 bg-brand-500/5 rounded-xl border border-brand-500/20">
+          <p className="text-xs text-slate-600 dark:text-slate-400">Email: <span className="font-black text-brand-600 dark:text-brand-400">{STATIC_EMAIL}</span></p>
+        </div>
+
+        {/* Completion Reminder */}
+        <div className="p-4 bg-sky-500/5 rounded-xl border border-sky-500/20 space-y-2">
+          <p className="text-[10px] font-black text-sky-600 dark:text-sky-400 uppercase">Completion Checklist:</p>
+          <ul className="text-xs text-sky-700 dark:text-sky-300 space-y-1 font-medium">
+            <li className={`flex items-center gap-2 ${profileData.name.trim() ? 'text-emerald-600 dark:text-emerald-400' : ''}`}>
+              <span>{profileData.name.trim() ? '✓' : '○'}</span> Full name provided
+            </li>
+            <li className={`flex items-center gap-2 ${profileData.college.trim() ? 'text-emerald-600 dark:text-emerald-400' : ''}`}>
+              <span>{profileData.college.trim() ? '✓' : '○'}</span> College/Institution provided
+            </li>
+            <li className={`flex items-center gap-2 ${profileData.skills.length > 0 ? 'text-emerald-600 dark:text-emerald-400' : ''}`}>
+              <span>{profileData.skills.length > 0 ? '✓' : '○'}</span> At least one skill added
+            </li>
+            <li className="flex items-center gap-2">
+              <span>✓</span> Professional links (optional but recommended)
+            </li>
+          </ul>
+        </div>
+
+        {error && <p className="text-xs text-rose-500 font-bold px-2 text-center">{error}</p>}
       </div>
 
-      {error && <p className="text-xs text-rose-500 font-bold px-2 text-center">{error}</p>}
-
-      <div className="flex space-x-3 pt-4">
+      {/* Sticky Footer */}
+      <div className="fixed bottom-0 left-0 right-0 p-6 bg-white dark:bg-zinc-900 border-t border-slate-200 dark:border-white/5 flex space-x-3 max-w-md mx-auto">
         <button
           onClick={() => setMode('signup-credentials')}
           className="flex-1 py-4 bg-slate-200 dark:bg-zinc-800 text-slate-600 dark:text-slate-400 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-300 dark:hover:bg-zinc-700 transition-all disabled:opacity-50"
@@ -587,7 +801,7 @@ const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
         <button
           onClick={handleSignUpProfileComplete}
           className="flex-1 py-4 vibrant-gradient text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-brand-500/20 hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center space-x-2"
-          disabled={loading || !profileData.name.trim() || !profileData.college.trim()}
+          disabled={loading || !profileData.name.trim() || !profileData.college.trim() || profileData.skills.length === 0}
         >
           {loading ? (
             <>
