@@ -166,7 +166,7 @@ const App: React.FC = () => {
   const activeProject = projects.find(p => p.id === activeProjectId);
   const activeChannel = activeCommunity?.channels.find(c => c.id === activeChannelId);
   const communityProjects = projects.filter(p => p.communityId === activeCommunityId);
-  const viewedUser = MOCK_USERS.find(u => u.id === selectedUserId) || (selectedUserId === currentUser.id ? currentUser : null) || MOCK_USERS[0];
+  const viewedUser = MOCK_USERS.find(u => u.id === selectedUserId) || (selectedUserId === currentUser?.id ? currentUser : null) || MOCK_USERS[0];
 
   const handleSelectCommunity = (id: string | null) => {
     setActiveCommunityId(id);
@@ -487,14 +487,6 @@ const App: React.FC = () => {
   const handleAddResource = (projectId: string, title: string, url: string, type: ProjectResource['type'], size?: string) => {
     const newRes: ProjectResource = { id: `res-${Date.now()}`, title, url, type, size };
     setProjects(prev => prev.map(p => p.id === projectId ? { ...p, resources: [...p.resources, newRes] } : p));
-  };
-
-  const handleLogout = () => {
-    setIsLanding(true);
-    setView('home');
-    setActiveCommunityId(null);
-    // Reset simulation for next login
-    setCurrentUser(prev => ({ ...prev, hasOnboarded: false }));
   };
 
   if (!isAuthenticated) {
