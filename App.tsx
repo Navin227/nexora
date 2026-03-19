@@ -8,7 +8,7 @@ import Explore from './components/Explore';
 import CommunityDashboard from './components/CommunityDashboard';
 import ChatWindow from './components/ChatWindow';
 import MemberSidebar from './components/MemberSidebar';
-import Login from './components/Login';
+import OTPLogin from './components/OTPLogin';
 import { MOCK_COMMUNITIES, MOCK_PROJECTS, MOCK_USERS } from './constants';
 import { Community, Project, ChatMessage, User, Milestone, ProjectResource, ProjectStatus, JoinRequest } from './types';
 import { socketService } from './services/socketService';
@@ -77,7 +77,7 @@ const App: React.FC = () => {
   useEffect(() => {
     const checkAuthSession = async () => {
       try {
-        const token = sessionStorage.getItem('google_auth_token');
+        const token = sessionStorage.getItem('nexora_auth_token');
         const userDataStr = sessionStorage.getItem('nexora_user');
         
         if (token && userDataStr) {
@@ -89,7 +89,6 @@ const App: React.FC = () => {
         }
       } catch (err) {
         console.error('Failed to restore auth session:', err);
-        // Continue with unauthenticated state
       }
     };
 
@@ -149,8 +148,9 @@ const App: React.FC = () => {
 
   const handleLogout = () => {
     try {
-      sessionStorage.removeItem('google_auth_token');
+      sessionStorage.removeItem('nexora_auth_token');
       sessionStorage.removeItem('nexora_user');
+      sessionStorage.removeItem('nexora_phone');
     } catch (err) {
       console.error('Failed to clear session:', err);
     }
@@ -490,11 +490,11 @@ const App: React.FC = () => {
   };
 
   if (!isAuthenticated) {
-    return <Login onAuthSuccess={handleAuthSuccess} />;
+    return <OTPLogin onAuthSuccess={handleAuthSuccess} />;
   }
 
   if (!currentUser) {
-    return <Login onAuthSuccess={handleAuthSuccess} />;
+    return <OTPLogin onAuthSuccess={handleAuthSuccess} />;
   }
 
   if (isLanding) {
