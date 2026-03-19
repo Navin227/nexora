@@ -10,6 +10,7 @@ import ChatWindow from './components/ChatWindow';
 import MemberSidebar from './components/MemberSidebar';
 import { MOCK_COMMUNITIES, MOCK_PROJECTS, MOCK_USERS } from './constants';
 import { Community, Project, ChatMessage, User, Milestone, ProjectResource, ProjectStatus, JoinRequest } from './types';
+import { socketService } from './services/socketService';
 
 const App: React.FC = () => {
   const [isLanding, setIsLanding] = useState(true);
@@ -48,6 +49,9 @@ const App: React.FC = () => {
 
   const [isCreatingCommunity, setIsCreatingCommunity] = useState(false);
   const [newCommunityData, setNewCommunityData] = useState({ name: '', description: '', firstMilestone: '' });
+  const [communityFormErrors, setCommunityFormErrors] = useState<Record<string, string>>({});
+  const [communitySubmitting, setCommunitySubmitting] = useState(false);
+  const [communitySuccess, setCommunitySuccess] = useState(false);
   
   const [isCreatingProject, setIsCreatingProject] = useState(false);
   const [newProjectData, setNewProjectData] = useState({ 
@@ -56,6 +60,10 @@ const App: React.FC = () => {
     roles: '', 
     initialMilestones: ['Phase 1: Initial Research', 'Phase 2: MVP Design'] 
   });
+  const [projectFormErrors, setProjectFormErrors] = useState<Record<string, string>>({});
+  const [projectSubmitting, setProjectSubmitting] = useState(false);
+  const [projectSuccess, setProjectSuccess] = useState(false);
+  const [sendingMessage, setSendingMessage] = useState(false);
 
   const [onboardingForm, setOnboardingForm] = useState({
     bio: '',
@@ -74,6 +82,34 @@ const App: React.FC = () => {
       root.classList.remove('dark');
     }
   }, [darkMode]);
+
+  // Initialize socket connection
+  useEffect(() => {
+    if (!isLanding) {
+      socketService.connect().catch(err => {
+        console.warn('[App] Socket connection failed, using mock mode:', err);
+      });
+
+      // Listen for incoming messages
+      socketService.on('message:receive', (data) => {
+        setChannelMessages(prev => ({
+          ...prev,
+          [data.channelId]: [...(prev[data.channelId] || []), data.message]
+        }));
+      });
+
+      // Listen for DM messages
+      socketService.on('dm:receive', (data) => {
+        // Handle DM if we implement DM functionality
+        console.log('[Socket] DM received:', data);
+      });
+
+      return () => {
+        socketService.off('message:receive', () => {});
+        socketService.off('dm:receive', () => {});
+      };
+    }
+  }, [isLanding]);
 
   const activeCommunity = communities.find(c => c.id === activeCommunityId);
   const activeProject = projects.find(p => p.id === activeProjectId);
@@ -164,77 +200,144 @@ const App: React.FC = () => {
   };
 
   const handleCreateCommunitySubmit = () => {
-    if (!newCommunityData.name.trim()) return;
-    const newId = `c${Date.now()}`;
-    const newComm: Community = {
-      id: newId,
-      name: newCommunityData.name,
-      description: newCommunityData.description,
-      icon: '🚀',
-      memberCount: 1,
-      projectCount: 1,
-      channels: [
-        { id: `ch-gen-${newId}`, name: 'general', type: 'chat' },
-        { id: `ch-pro-${newId}`, name: 'projects', type: 'chat' }
-      ],
-      tags: ['new-space'],
-      createdBy: currentUser.id,
-      roles: [{ id: 'r1', name: 'Maintainer', color: 'text-brand-500' }, { id: 'r2', name: 'Member', color: 'text-slate-500' }],
-      members: [{ userId: currentUser.id, roleId: 'r1' }]
-    };
+    const errors: Record<string, string> = {};
     
-    const initialProject: Project = {
-      id: `p-init-${newId}`,
-      name: `${newCommunityData.name} Initiation`,
-      description: 'The starting project for this community.',
-      communityId: newId,
-      status: 'Ongoing',
-      techStack: [],
-      contributors: [currentUser.id],
-      tasks: [],
-      milestones: [{ id: 'm-init', title: newCommunityData.firstMilestone || 'Set up community foundation', description: '', dueDate: '', status: 'active' }],
-      resources: [],
-      createdBy: currentUser.id
-    };
+    if (!newCommunityData.name.trim()) {
+      errors.name = 'Community name is required';
+    } else if (newCommunityData.name.trim().length < 3) {
+      errors.name = 'Name must be at least 3 characters';
+    }
+    
+    if (newCommunityData.description.trim().length < 10) {
+      errors.description = 'Description must be at least 10 characters';
+    }
+    
+    if (Object.keys(errors).length > 0) {
+      setCommunityFormErrors(errors);
+      return;
+    }
 
-    setCommunities(prev => [...prev, newComm]);
-    setProjects(prev => [...prev, initialProject]);
-    setJoinedCommunityIds(prev => [...prev, newId]);
-    setIsCreatingCommunity(false);
-    setNewCommunityData({ name: '', description: '', firstMilestone: '' });
-    handleSelectCommunity(newId);
+    setCommunitySubmitting(true);
+    setCommunityFormErrors({});
+
+    // Simulate API call
+    setTimeout(() => {
+      const newId = `c${Date.now()}`;
+      const newComm: Community = {
+        id: newId,
+        name: newCommunityData.name,
+        description: newCommunityData.description,
+        icon: '🚀',
+        memberCount: 1,
+        projectCount: 1,
+        channels: [
+          { id: `ch-gen-${newId}`, name: 'general', type: 'chat' },
+          { id: `ch-pro-${newId}`, name: 'projects', type: 'chat' }
+        ],
+        tags: ['new-space'],
+        createdBy: currentUser.id,
+        roles: [{ id: 'r1', name: 'Maintainer', color: 'text-brand-500' }, { id: 'r2', name: 'Member', color: 'text-slate-500' }],
+        members: [{ userId: currentUser.id, roleId: 'r1' }]
+      };
+      
+      const initialProject: Project = {
+        id: `p-init-${newId}`,
+        name: `${newCommunityData.name} Initiation`,
+        description: 'The starting project for this community.',
+        communityId: newId,
+        status: 'Ongoing',
+        techStack: [],
+        contributors: [currentUser.id],
+        tasks: [],
+        milestones: [{ id: 'm-init', title: newCommunityData.firstMilestone || 'Set up community foundation', description: '', dueDate: '', status: 'active' }],
+        resources: [],
+        createdBy: currentUser.id
+      };
+
+      setCommunities(prev => [...prev, newComm]);
+      setProjects(prev => [...prev, initialProject]);
+      setJoinedCommunityIds(prev => [...prev, newId]);
+      setCommunitySuccess(true);
+      
+      // Auto-close after success
+      setTimeout(() => {
+        setIsCreatingCommunity(false);
+        setNewCommunityData({ name: '', description: '', firstMilestone: '' });
+        setCommunitySuccess(false);
+        handleSelectCommunity(newId);
+      }, 1500);
+      
+      setCommunitySubmitting(false);
+    }, 800);
   };
 
   const handleCreateProjectSubmit = () => {
-    if (!newProjectData.name.trim() || !activeCommunityId) return;
-    const newId = `p${Date.now()}`;
-    const milestones: Milestone[] = newProjectData.initialMilestones.map((m, i) => ({
-      id: `m${i}-${Date.now()}`,
-      title: m,
-      description: '',
-      dueDate: '',
-      status: i === 0 ? 'active' : 'pending'
-    }));
+    const errors: Record<string, string> = {};
+    
+    if (!newProjectData.name.trim()) {
+      errors.name = 'Project name is required';
+    } else if (newProjectData.name.trim().length < 3) {
+      errors.name = 'Name must be at least 3 characters';
+    }
+    
+    if (!activeCommunityId) {
+      errors.community = 'Please select a community first';
+      setProjectFormErrors(errors);
+      return;
+    }
 
-    const newProject: Project = {
-      id: newId,
-      name: newProjectData.name,
-      description: newProjectData.description,
-      communityId: activeCommunityId,
-      status: 'Proposed',
-      techStack: [],
-      contributors: [currentUser.id],
-      tasks: [],
-      milestones: milestones,
-      resources: [],
-      rolesNeeded: newProjectData.roles.split(',').map(r => r.trim()).filter(r => !!r),
-      createdBy: currentUser.id
-    };
-    setProjects(prev => [...prev, newProject]);
-    setIsCreatingProject(false);
-    setNewProjectData({ name: '', description: '', roles: '', initialMilestones: ['Phase 1: Initial Research', 'Phase 2: MVP Design'] });
-    setActiveProjectId(newId);
-    setActiveChannelId(null);
+    const validMilestones = newProjectData.initialMilestones.filter(m => m.trim().length > 0);
+    if (validMilestones.length < 1) {
+      errors.milestones = 'Add at least one milestone';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setProjectFormErrors(errors);
+      return;
+    }
+
+    setProjectSubmitting(true);
+    setProjectFormErrors({});
+
+    // Simulate API call
+    setTimeout(() => {
+      const newId = `p${Date.now()}`;
+      const milestones: Milestone[] = validMilestones.map((m, i) => ({
+        id: `m${i}-${Date.now()}`,
+        title: m,
+        description: '',
+        dueDate: '',
+        status: i === 0 ? 'active' : 'pending'
+      }));
+
+      const newProject: Project = {
+        id: newId,
+        name: newProjectData.name,
+        description: newProjectData.description,
+        communityId: activeCommunityId,
+        status: 'Proposed',
+        techStack: [],
+        contributors: [currentUser.id],
+        tasks: [],
+        milestones: milestones,
+        resources: [],
+        rolesNeeded: newProjectData.roles.split(',').map(r => r.trim()).filter(r => !!r),
+        createdBy: currentUser.id
+      };
+      setProjects(prev => [...prev, newProject]);
+      setProjectSuccess(true);
+      
+      // Auto-close after success
+      setTimeout(() => {
+        setIsCreatingProject(false);
+        setNewProjectData({ name: '', description: '', roles: '', initialMilestones: ['Phase 1: Initial Research', 'Phase 2: MVP Design'] });
+        setProjectSuccess(false);
+        setActiveProjectId(newId);
+        setActiveChannelId(null);
+      }, 1500);
+      
+      setProjectSubmitting(false);
+    }, 800);
   };
 
   const handleJoinCommunity = (id: string) => {
@@ -309,10 +412,20 @@ const App: React.FC = () => {
       content,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
+    
+    // Update local state
     setChannelMessages(prev => ({
       ...prev,
       [activeChannelId]: [...(prev[activeChannelId] || []), newMessage]
     }));
+
+    // Emit to socket if connected
+    if (socketService.isSocketConnected()) {
+      socketService.emit('message:send', {
+        channelId: activeChannelId,
+        message: newMessage
+      });
+    }
   };
 
   const handleStartProject = (projectId: string) => {
@@ -418,25 +531,99 @@ const App: React.FC = () => {
       {isCreatingCommunity && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-sm">
           <div className="bg-white dark:bg-zinc-900 w-full max-w-lg p-10 rounded-[2.5rem] shadow-2xl animate-in zoom-in duration-300 border border-slate-200 dark:border-white/10">
-            <h2 className="text-3xl font-black text-slate-900 dark:text-white mb-8 tracking-tight uppercase">Create a Space</h2>
-            <div className="space-y-6">
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Community Name</label>
-                <input type="text" placeholder="e.g. Robotics Club" className="w-full bg-slate-100 dark:bg-zinc-950 border-2 border-slate-200 dark:border-white/5 p-5 rounded-2xl outline-none focus:ring-2 focus:ring-brand-500 text-sm font-bold" value={newCommunityData.name} onChange={e => setNewCommunityData(p => ({ ...p, name: e.target.value }))} />
+            {communitySuccess ? (
+              <div className="flex flex-col items-center justify-center py-12 space-y-4">
+                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center animate-bounce">
+                  <svg className="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                </div>
+                <p className="text-lg font-black text-slate-900 dark:text-white uppercase">Space Created!</p>
+                <p className="text-sm text-slate-500 dark:text-slate-400">Redirecting...</p>
               </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Description</label>
-                <textarea placeholder="What's the mission?" className="w-full bg-slate-100 dark:bg-zinc-950 border-2 border-slate-200 dark:border-white/5 p-5 rounded-2xl outline-none focus:ring-2 focus:ring-brand-500 text-sm font-medium h-24" value={newCommunityData.description} onChange={e => setNewCommunityData(p => ({ ...p, description: e.target.value }))} />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Starter Milestone</label>
-                <input type="text" placeholder="e.g. Host first meetup" className="w-full bg-slate-100 dark:bg-zinc-950 border-2 border-slate-200 dark:border-white/5 p-5 rounded-2xl outline-none focus:ring-2 focus:ring-brand-500 text-sm font-bold" value={newCommunityData.firstMilestone} onChange={e => setNewCommunityData(p => ({ ...p, firstMilestone: e.target.value }))} />
-              </div>
-              <div className="flex space-x-4 pt-4">
-                <button onClick={() => setIsCreatingCommunity(false)} className="flex-1 py-4 bg-slate-200 dark:bg-zinc-800 text-slate-600 dark:text-slate-400 rounded-2xl font-black text-xs uppercase tracking-widest">Cancel</button>
-                <button onClick={handleCreateCommunitySubmit} className="flex-[2] py-4 vibrant-gradient text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-brand-500/20">Create Space</button>
-              </div>
-            </div>
+            ) : (
+              <>
+                <h2 className="text-3xl font-black text-slate-900 dark:text-white mb-8 tracking-tight uppercase">Create a Space</h2>
+                <div className="space-y-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Community Name *</label>
+                    <input 
+                      type="text" 
+                      placeholder="e.g. Robotics Club" 
+                      className={`w-full bg-slate-100 dark:bg-zinc-950 border-2 p-5 rounded-2xl outline-none focus:ring-2 focus:ring-brand-500 text-sm font-bold transition-all ${
+                        communityFormErrors.name 
+                          ? 'border-rose-500 dark:border-rose-500' 
+                          : 'border-slate-200 dark:border-white/5'
+                      }`}
+                      value={newCommunityData.name} 
+                      onChange={e => {
+                        setNewCommunityData(p => ({ ...p, name: e.target.value }));
+                        if (communityFormErrors.name) setCommunityFormErrors(p => ({ ...p, name: '' }));
+                      }}
+                      disabled={communitySubmitting}
+                    />
+                    {communityFormErrors.name && (
+                      <p className="text-xs text-rose-500 font-bold px-2">{communityFormErrors.name}</p>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Description *</label>
+                    <textarea 
+                      placeholder="What's the mission?" 
+                      className={`w-full bg-slate-100 dark:bg-zinc-950 border-2 p-5 rounded-2xl outline-none focus:ring-2 focus:ring-brand-500 text-sm font-medium h-24 transition-all ${
+                        communityFormErrors.description
+                          ? 'border-rose-500 dark:border-rose-500'
+                          : 'border-slate-200 dark:border-white/5'
+                      }`}
+                      value={newCommunityData.description} 
+                      onChange={e => {
+                        setNewCommunityData(p => ({ ...p, description: e.target.value }));
+                        if (communityFormErrors.description) setCommunityFormErrors(p => ({ ...p, description: '' }));
+                      }}
+                      disabled={communitySubmitting}
+                    />
+                    {communityFormErrors.description && (
+                      <p className="text-xs text-rose-500 font-bold px-2">{communityFormErrors.description}</p>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Starter Milestone</label>
+                    <input 
+                      type="text" 
+                      placeholder="e.g. Host first meetup" 
+                      className="w-full bg-slate-100 dark:bg-zinc-950 border-2 border-slate-200 dark:border-white/5 p-5 rounded-2xl outline-none focus:ring-2 focus:ring-brand-500 text-sm font-bold transition-all"
+                      value={newCommunityData.firstMilestone} 
+                      onChange={e => setNewCommunityData(p => ({ ...p, firstMilestone: e.target.value }))}
+                      disabled={communitySubmitting}
+                    />
+                  </div>
+                  <div className="flex space-x-4 pt-4">
+                    <button 
+                      onClick={() => setIsCreatingCommunity(false)} 
+                      className="flex-1 py-4 bg-slate-200 dark:bg-zinc-800 text-slate-600 dark:text-slate-400 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-300 dark:hover:bg-zinc-700 transition-all disabled:opacity-50"
+                      disabled={communitySubmitting}
+                    >
+                      Cancel
+                    </button>
+                    <button 
+                      onClick={handleCreateCommunitySubmit} 
+                      className="flex-[2] py-4 vibrant-gradient text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-brand-500/20 hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center space-x-2"
+                      disabled={communitySubmitting}
+                    >
+                      {communitySubmitting ? (
+                        <>
+                          <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          <span>Creating...</span>
+                        </>
+                      ) : (
+                        <span>Create Space</span>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -445,41 +632,122 @@ const App: React.FC = () => {
       {isCreatingProject && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-sm">
           <div className="bg-white dark:bg-zinc-900 w-full max-w-xl p-10 rounded-[2.5rem] shadow-2xl animate-in zoom-in duration-300 border border-slate-200 dark:border-white/10">
-            <h2 className="text-3xl font-black text-slate-900 dark:text-white mb-8 tracking-tight uppercase">Propose Project</h2>
-            <div className="space-y-6">
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Project Name</label>
-                <input type="text" placeholder="e.g. Open Source CLI" className="w-full bg-slate-100 dark:bg-zinc-950 border-2 border-slate-200 dark:border-white/5 p-5 rounded-2xl outline-none focus:ring-2 focus:ring-brand-500 text-sm font-bold" value={newProjectData.name} onChange={e => setNewProjectData(p => ({ ...p, name: e.target.value }))} />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Initial Milestones</label>
-                <div className="space-y-2 max-h-40 overflow-y-auto custom-scrollbar p-1">
-                  {newProjectData.initialMilestones.map((m, idx) => (
-                    <div key={idx} className="flex items-center space-x-2">
-                      <input type="text" className="flex-1 bg-slate-100 dark:bg-zinc-950 border border-slate-200 dark:border-white/5 p-3 rounded-xl text-xs font-bold" value={m} onChange={e => {
-                        const next = [...newProjectData.initialMilestones];
-                        next[idx] = e.target.value;
-                        setNewProjectData(p => ({ ...p, initialMilestones: next }));
-                      }} />
-                      {idx > 0 && (
-                        <button onClick={() => {
-                          const next = newProjectData.initialMilestones.filter((_, i) => i !== idx);
-                          setNewProjectData(p => ({ ...p, initialMilestones: next }));
-                        }} className="p-2 text-rose-500 hover:scale-110 transition-transform">×</button>
-                      )}
-                    </div>
-                  ))}
-                  <button onClick={() => setNewProjectData(p => ({ ...p, initialMilestones: [...p.initialMilestones, ''] }))} className="text-[9px] font-black text-brand-500 uppercase flex items-center space-x-1 py-1 hover:underline">
-                    <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" /></svg>
-                    <span>Add Milestone</span>
-                  </button>
+            {projectSuccess ? (
+              <div className="flex flex-col items-center justify-center py-12 space-y-4">
+                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center animate-bounce">
+                  <svg className="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
                 </div>
+                <p className="text-lg font-black text-slate-900 dark:text-white uppercase">Project Created!</p>
+                <p className="text-sm text-slate-500 dark:text-slate-400">Redirecting...</p>
               </div>
-              <div className="flex space-x-4 pt-4">
-                <button onClick={() => setIsCreatingProject(false)} className="flex-1 py-4 bg-slate-200 dark:bg-zinc-800 text-slate-600 dark:text-slate-400 rounded-2xl font-black text-xs uppercase tracking-widest">Cancel</button>
-                <button onClick={handleCreateProjectSubmit} className="flex-[2] py-4 bg-slate-900 dark:bg-white text-white dark:text-zinc-900 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl">Propose</button>
-              </div>
-            </div>
+            ) : (
+              <>
+                <h2 className="text-3xl font-black text-slate-900 dark:text-white mb-8 tracking-tight uppercase">Propose Project</h2>
+                <div className="space-y-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Project Name *</label>
+                    <input 
+                      type="text" 
+                      placeholder="e.g. Open Source CLI" 
+                      className={`w-full bg-slate-100 dark:bg-zinc-950 border-2 p-5 rounded-2xl outline-none focus:ring-2 focus:ring-brand-500 text-sm font-bold transition-all ${
+                        projectFormErrors.name
+                          ? 'border-rose-500 dark:border-rose-500'
+                          : 'border-slate-200 dark:border-white/5'
+                      }`}
+                      value={newProjectData.name} 
+                      onChange={e => {
+                        setNewProjectData(p => ({ ...p, name: e.target.value }));
+                        if (projectFormErrors.name) setProjectFormErrors(p => ({ ...p, name: '' }));
+                      }}
+                      disabled={projectSubmitting}
+                    />
+                    {projectFormErrors.name && (
+                      <p className="text-xs text-rose-500 font-bold px-2">{projectFormErrors.name}</p>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Description</label>
+                    <textarea 
+                      placeholder="What will this project build?" 
+                      className="w-full bg-slate-100 dark:bg-zinc-950 border-2 border-slate-200 dark:border-white/5 p-5 rounded-2xl outline-none focus:ring-2 focus:ring-brand-500 text-sm font-medium h-20 transition-all"
+                      value={newProjectData.description} 
+                      onChange={e => setNewProjectData(p => ({ ...p, description: e.target.value }))}
+                      disabled={projectSubmitting}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Initial Milestones *</label>
+                    <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar p-2 bg-slate-50 dark:bg-zinc-950/50 rounded-xl border border-slate-200 dark:border-white/5">
+                      {newProjectData.initialMilestones.map((m, idx) => (
+                        <div key={idx} className="flex items-center space-x-2">
+                          <input 
+                            type="text" 
+                            className="flex-1 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-white/10 p-3 rounded-lg text-xs font-bold outline-none focus:ring-2 focus:ring-brand-500/30" 
+                            value={m} 
+                            onChange={e => {
+                              const next = [...newProjectData.initialMilestones];
+                              next[idx] = e.target.value;
+                              setNewProjectData(p => ({ ...p, initialMilestones: next }));
+                              if (projectFormErrors.milestones) setProjectFormErrors(p => ({ ...p, milestones: '' }));
+                            }}
+                            disabled={projectSubmitting}
+                          />
+                          {idx > 0 && (
+                            <button 
+                              onClick={() => {
+                                const next = newProjectData.initialMilestones.filter((_, i) => i !== idx);
+                                setNewProjectData(p => ({ ...p, initialMilestones: next }));
+                              }} 
+                              className="p-2 text-rose-500 hover:scale-110 transition-transform disabled:opacity-50"
+                              disabled={projectSubmitting}
+                            >
+                              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                      <button 
+                        onClick={() => setNewProjectData(p => ({ ...p, initialMilestones: [...p.initialMilestones, ''] }))} 
+                        className="text-[9px] font-black text-brand-500 uppercase flex items-center space-x-1 py-2 hover:underline disabled:opacity-50"
+                        disabled={projectSubmitting}
+                      >
+                        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" /></svg>
+                        <span>Add Milestone</span>
+                      </button>
+                    </div>
+                    {projectFormErrors.milestones && (
+                      <p className="text-xs text-rose-500 font-bold px-2">{projectFormErrors.milestones}</p>
+                    )}
+                  </div>
+                  <div className="flex space-x-4 pt-4">
+                    <button 
+                      onClick={() => setIsCreatingProject(false)} 
+                      className="flex-1 py-4 bg-slate-200 dark:bg-zinc-800 text-slate-600 dark:text-slate-400 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-300 dark:hover:bg-zinc-700 transition-all disabled:opacity-50"
+                      disabled={projectSubmitting}
+                    >
+                      Cancel
+                    </button>
+                    <button 
+                      onClick={handleCreateProjectSubmit} 
+                      className="flex-[2] py-4 bg-gradient-to-r from-slate-900 to-slate-800 dark:from-white dark:to-slate-200 text-white dark:text-zinc-900 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center space-x-2"
+                      disabled={projectSubmitting}
+                    >
+                      {projectSubmitting ? (
+                        <>
+                          <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          <span>Proposing...</span>
+                        </>
+                      ) : (
+                        <span>Propose</span>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -521,7 +789,7 @@ const App: React.FC = () => {
               <ChannelPanel community={activeCommunity} projects={communityProjects} activeChannelId={activeChannelId} activeProjectId={activeProjectId} onSelectChannel={handleSelectChannel} onSelectProject={handleSelectProject} onCreateProject={() => setIsCreatingProject(true)} />
               <div className="flex-1 flex overflow-hidden bg-white dark:bg-zinc-900/10">
                 {activeChannelId ? (
-                  <ChatWindow messages={channelMessages[activeChannelId!] || []} onSendMessage={handleSendMessage} currentUser={currentUser} onViewProfile={handleViewProfile} placeholder={`Message in #${activeChannel?.name || 'general'}...`} />
+                  <ChatWindow messages={channelMessages[activeChannelId!] || []} onSendMessage={handleSendMessage} currentUser={currentUser} onViewProfile={handleViewProfile} placeholder={`Message in #${activeChannel?.name || 'general'}...`} isLoading={sendingMessage} />
                 ) : activeProject ? (
                   <ProjectView project={activeProject} currentUserId={currentUser.id} onStartProject={handleStartProject} onAddResource={handleAddResource} onUpdateMilestone={handleUpdateMilestone} onReorderMilestones={handleReorderMilestones} onAddMilestone={handleAddMilestone} onJoinProject={handleJoinProject} />
                 ) : (
