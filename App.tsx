@@ -8,12 +8,14 @@ import Explore from './components/Explore';
 import CommunityDashboard from './components/CommunityDashboard';
 import ChatWindow from './components/ChatWindow';
 import MemberSidebar from './components/MemberSidebar';
+import Login from './components/Login';
 import { MOCK_COMMUNITIES, MOCK_PROJECTS, MOCK_USERS } from './constants';
 import { Community, Project, ChatMessage, User, Milestone, ProjectResource, ProjectStatus, JoinRequest } from './types';
 import { socketService } from './services/socketService';
 
 const App: React.FC = () => {
   const [isLanding, setIsLanding] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isOnboarding, setIsOnboarding] = useState(false);
   const [activeCommunityId, setActiveCommunityId] = useState<string | null>(null);
   const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
@@ -23,20 +25,8 @@ const App: React.FC = () => {
   const [joinedCommunityIds, setJoinedCommunityIds] = useState<string[]>(['c1']);
   const [previewCommunity, setPreviewCommunity] = useState<Community | null>(null);
   
-  // Simulation: start as a "new" user if we want to show onboarding
-  const [currentUser, setCurrentUser] = useState<User>({
-    id: 'u-new',
-    name: 'New Builder',
-    role: 'Student',
-    college: 'Your University',
-    bio: '',
-    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=NewUser',
-    skills: [],
-    githubUrl: '',
-    linkedinUrl: '',
-    reputation: 0,
-    hasOnboarded: false
-  });
+  // Current authenticated user
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [communities, setCommunities] = useState<Community[]>(MOCK_COMMUNITIES);
@@ -83,9 +73,32 @@ const App: React.FC = () => {
     }
   }, [darkMode]);
 
+  // Check for existing auth session on mount
+  useEffect(() => {
+    const checkAuthSession = async () => {
+      try {
+        const token = sessionStorage.getItem('google_auth_token');
+        const userDataStr = sessionStorage.getItem('nexora_user');
+        
+        if (token && userDataStr) {
+          const userData = JSON.parse(userDataStr);
+          setCurrentUser(userData);
+          setIsAuthenticated(true);
+          setIsLanding(false);
+          setIsOnboarding(!userData.hasOnboarded);
+        }
+      } catch (err) {
+        console.error('Failed to restore auth session:', err);
+        // Continue with unauthenticated state
+      }
+    };
+
+    checkAuthSession();
+  }, []);
+
   // Initialize socket connection
   useEffect(() => {
-    if (!isLanding) {
+    if (!isLanding && isAuthenticated) {
       socketService.connect().catch(err => {
         console.warn('[App] Socket connection failed, using mock mode:', err);
       });
@@ -109,7 +122,45 @@ const App: React.FC = () => {
         socketService.off('dm:receive', () => {});
       };
     }
-  }, [isLanding]);
+  }, [isLanding, isAuthenticated]);
+
+  // Auth handler
+  const handleAuthSuccess = (user: User) => {
+    // Store user data and token
+    try {
+      sessionStorage.setItem('nexora_user', JSON.stringify(user));
+    } catch (err) {
+      console.error('Failed to store user data:', err);
+    }
+
+    setCurrentUser(user);
+    setIsAuthenticated(true);
+    setIsLanding(false);
+    
+    // Initialize with first community if available
+    if (MOCK_COMMUNITIES.length > 0) {
+      setActiveCommunityId(MOCK_COMMUNITIES[0].id);
+      const firstChannel = MOCK_COMMUNITIES[0].channels?.[0];
+      if (firstChannel) {
+        setActiveChannelId(firstChannel.id);
+      }
+    }
+  };
+
+  const handleLogout = () => {
+    try {
+      sessionStorage.removeItem('google_auth_token');
+      sessionStorage.removeItem('nexora_user');
+    } catch (err) {
+      console.error('Failed to clear session:', err);
+    }
+
+    setCurrentUser(null);
+    setIsAuthenticated(false);
+    setIsLanding(true);
+    setActiveCommunityId(null);
+    setActiveChannelId(null);
+  };
 
   const activeCommunity = communities.find(c => c.id === activeCommunityId);
   const activeProject = projects.find(p => p.id === activeProjectId);
@@ -147,9 +198,10 @@ const App: React.FC = () => {
   };
 
   const handleLogin = () => {
-    // Simulated Google Login
+    // This is called from the landing page - now we use the Login component
+    // Authentication happens through Google OAuth in the Login component
     setIsLanding(false);
-    if (!currentUser.hasOnboarded) {
+    if (currentUser && !currentUser.hasOnboarded) {
       setIsOnboarding(true);
     } else {
       setView('home');
@@ -444,6 +496,14 @@ const App: React.FC = () => {
     // Reset simulation for next login
     setCurrentUser(prev => ({ ...prev, hasOnboarded: false }));
   };
+
+  if (!isAuthenticated) {
+    return <Login onAuthSuccess={handleAuthSuccess} />;
+  }
+
+  if (!currentUser) {
+    return <Login onAuthSuccess={handleAuthSuccess} />;
+  }
 
   if (isLanding) {
     return (
@@ -776,6 +836,16 @@ const App: React.FC = () => {
           <div className="flex items-center space-x-4">
              <button onClick={() => setDarkMode(!darkMode)} className="p-3 bg-slate-100 dark:bg-white/5 rounded-xl hover:scale-110 active:scale-95 transition-all text-slate-500 dark:text-slate-400 hover:text-brand-500">
                 {darkMode ? <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg> : <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>}
+             </button>
+             <button 
+               onClick={handleLogout} 
+               className="p-3 bg-slate-100 dark:bg-white/5 rounded-xl hover:scale-110 active:scale-95 transition-all text-slate-500 dark:text-slate-400 hover:text-rose-500 group relative"
+               title="Sign out"
+             >
+               <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+               </svg>
+               <div className="absolute bottom-full right-0 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none bg-slate-900 dark:bg-white text-white dark:text-zinc-900 text-xs font-bold px-3 py-1 rounded whitespace-nowrap">Sign out</div>
              </button>
           </div>
         </header>

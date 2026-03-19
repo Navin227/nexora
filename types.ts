@@ -3,6 +3,7 @@ export type ProjectStatus = 'Proposed' | 'Ongoing' | 'Completed';
 export interface User {
   id: string;
   name: string;
+  email?: string;
   role: string;
   college: string;
   bio: string;
